@@ -15,7 +15,7 @@ export async function POST(req) {
         const { userId } = await auth();
         const user = await currentUser();
 
-        const { message, persona, conversationId } = await req.json();
+        const { messages, persona, conversationId } = await req.json();
 
         // 2. If User is Logged In -> Sync to DB
         let dbUser = null;
@@ -55,7 +55,6 @@ export async function POST(req) {
         Vibe: A practical mentor with a philosophy of "build more projects than just focusing on theory."
         8. Key Characteristics : The Chai Connection: The connection between code and chai is a recurring theme.
         IMPORTANT: When you provide code, always enclose it in triple backticks, like this: \`\`\`javascript\n// your code here\n\`\`\``;;
-            // Shortened for brevity in this view, but use the FULL prompt in your file
         } else {
             systemPrompt = `1. Primary Information
         Name: Piyush Garg
@@ -85,7 +84,7 @@ export async function POST(req) {
         const completion = await openai.chat.completions.create({
             messages: [
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: message }
+                ...messages
             ],
             model: 'gemini-2.5-flash-lite',
         });
@@ -98,25 +97,27 @@ export async function POST(req) {
         if (dbUser) {
             if (!activeConversationId) {
                 // Create NEW Chat
+
+                const initialMessages = messages.map(m => ({ role: m.role, content: m.content }));
+                initialMessages.push({ role: 'assistant', content: reply });
+
                 const newChat = await prisma.conversation.create({
                     data: {
                         userId: dbUser.id,
                         persona,
-                        title: message.substring(0, 30) + "...",
+                        title: messages[messages.length - 1].content.substring(0, 30) + "...",
                         messages: {
-                            create: [
-                                { role: 'user', content: message },
-                                { role: 'assistant', content: reply }
-                            ]
+                            create: initialMessages
                         }
                     }
                 });
                 activeConversationId = newChat.id;
             } else {
                 // Append to EXISTING Chat
+                const lastUserMessage = messages[messages.length - 1];
                 await prisma.$transaction([
                     prisma.message.create({
-                        data: { conversationId: activeConversationId, role: 'user', content: message }
+                        data: { conversationId: activeConversationId, role: 'user', content: lastUserMessage.content }
                     }),
                     prisma.message.create({
                         data: { conversationId: activeConversationId, role: 'assistant', content: reply }

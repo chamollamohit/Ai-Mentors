@@ -12,6 +12,7 @@ export async function GET() {
 
         if (!dbUser) return NextResponse.json([]);
 
+        // Return the conversation based on the current user
         const conversations = await prisma.conversation.findMany({
             where: { userId: dbUser.id },
             orderBy: { updatedAt: 'desc' },

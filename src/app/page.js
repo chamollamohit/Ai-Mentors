@@ -1,15 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { MessageSquare, ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 import { SignInButton, SignUpButton, UserButton, useUser } from "@clerk/nextjs";
-import { cn } from "@/lib/utils";
+
 
 export default function LandingPage() {
   const { isSignedIn, user } = useUser();
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-100 via-white to-white flex flex-col">
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] from-indigo-100 via-white to-white flex flex-col">
       {/* Modern Header */}
       <nav className="sticky top-0 z-50 backdrop-blur-md bg-white/70 border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-6 h-16 flex justify-between items-center">
@@ -17,7 +17,7 @@ export default function LandingPage() {
             <div className="bg-indigo-600 p-2 rounded-lg">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600">
+            <span className="text-xl font-bold bg-clip-text text-transparent bg-linear-to-r from-indigo-600 to-violet-600">
               AI Mentors
             </span>
           </div>
@@ -56,12 +56,12 @@ export default function LandingPage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
             </span>
-            Now powered by Gemini 2.5 Flash
+            Your 24/7 Coding Companion
           </div>
 
           <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-gray-900">
             Master Code with <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-500">
+            <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-600 to-violet-500">
               AI Personalities
             </span>
           </h1>

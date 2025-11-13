@@ -3,20 +3,78 @@
 import { useState, useRef, useEffect } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { dracula } from "react-syntax-highlighter/dist/esm/styles/prism";
 import {
     Send,
     ArrowLeft,
     User,
-    Bot,
     Loader2,
     PlusCircle,
     Menu,
     Lock,
     MessageSquare,
+    Trash2,
+    Copy,
+    Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SignInButton, SignUpButton, UserButton, useUser } from "@clerk/nextjs";
 import { PERSONAS, FREE_LIMIT } from "@/lib/constants";
+import Image from "next/image";
+
+const CodeBlock = ({ language, value }) => {
+    const [isCopied, setIsCopied] = useState(false);
+
+    const handleCopy = async () => {
+        if (!value) return;
+        await navigator.clipboard.writeText(value);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+    };
+
+    return (
+        <div className="w-full my-4 overflow-hidden rounded-lg border border-gray-200 bg-[#282a36]">
+            <div className="flex items-center justify-between px-3 py-1.5 bg-white/10 border-b border-white/10">
+                <span className="text-xs font-medium text-gray-300 lowercase">
+                    {language}
+                </span>
+                <button
+                    onClick={handleCopy}
+                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors"
+                    title="Copy code"
+                >
+                    {isCopied ? (
+                        <>
+                            <Check className="w-3.5 h-3.5 text-green-400" />
+                            <span className="text-green-400">Copied!</span>
+                        </>
+                    ) : (
+                        <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copy</span>
+                        </>
+                    )}
+                </button>
+            </div>
+            <div className="overflow-x-auto">
+                <SyntaxHighlighter
+                    style={dracula}
+                    language={language}
+                    PreTag="div"
+                    customStyle={{
+                        margin: 0,
+                        padding: "1rem",
+                        background: "transparent",
+                        fontSize: "0.85rem",
+                    }}
+                >
+                    {value}
+                </SyntaxHighlighter>
+            </div>
+        </div>
+    );
+};
 
 export default function ChatPage() {
     const { id: chatId } = useParams();
@@ -24,17 +82,14 @@ export default function ChatPage() {
     const router = useRouter();
     const { isSignedIn, user } = useUser();
 
-    // -- State --
     const [selectedPersona, setSelectedPersona] = useState(null);
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
 
-    // Sidebar & History
     const [chatHistory, setChatHistory] = useState([]);
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
-    // Guest Limit
     const [guestMsgCount, setGuestMsgCount] = useState(0);
     const [showLoginModal, setShowLoginModal] = useState(false);
 
@@ -55,8 +110,11 @@ export default function ChatPage() {
                     const data = await res.json();
 
                     if (data.messages) {
-                        // Default fallback if persona isn't saved in msg
-                        setSelectedPersona(PERSONAS["hitesh"]);
+                        const dbPersonaName = data.persona;
+                        const foundPersona = Object.values(PERSONAS).find(
+                            (p) => p.name === dbPersonaName
+                        );
+                        setSelectedPersona(foundPersona || PERSONAS["hitesh"]);
                         setMessages(data.messages);
                     }
                 } catch (e) {
@@ -70,7 +128,7 @@ export default function ChatPage() {
         setSidebarOpen(false);
     }, [chatId, searchParams]);
 
-    // 2. LOAD SIDEBAR HISTORY
+    // 2. LOAD SIDEBAR
     useEffect(() => {
         if (isSignedIn) {
             fetch("/api/conversations")
@@ -81,15 +139,36 @@ export default function ChatPage() {
         }
     }, [isSignedIn, chatId]);
 
-    // Auto-scroll
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, isLoading]);
 
     // --- HANDLERS ---
+    const handleDeleteChat = async (e, chatIdToDelete) => {
+        e.stopPropagation();
+        if (!confirm("Are you sure you want to delete this chat?")) return;
+
+        setChatHistory((prev) =>
+            prev.filter((chat) => chat.id !== chatIdToDelete)
+        );
+
+        try {
+            await fetch(`/api/conversations/${chatIdToDelete}`, {
+                method: "DELETE",
+            });
+            if (chatId === chatIdToDelete) {
+                router.push(
+                    `/chat/new?persona=${selectedPersona?.id || "hitesh"}`
+                );
+            }
+        } catch (error) {
+            console.error("Failed to delete:", error);
+            alert("Could not delete chat.");
+        }
+    };
+
     const handleSendMessage = async (e) => {
         e.preventDefault();
-
         if (!input.trim() || isLoading) return;
 
         if (!isSignedIn) {
@@ -101,7 +180,8 @@ export default function ChatPage() {
         }
 
         const userMessage = { role: "user", content: input };
-        setMessages((prev) => [...prev, userMessage]);
+        const newHistory = [...messages, userMessage];
+        setMessages(newHistory);
         setInput("");
         setIsLoading(true);
 
@@ -111,7 +191,7 @@ export default function ChatPage() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    message: userMessage.content,
+                    messages: newHistory,
                     persona: selectedPersona.name,
                     conversationId: activeId,
                 }),
@@ -121,6 +201,11 @@ export default function ChatPage() {
 
             if (chatId === "new" && data.conversationId) {
                 router.replace(`/chat/${data.conversationId}`);
+                if (isSignedIn) {
+                    fetch("/api/conversations")
+                        .then((r) => r.json())
+                        .then(setChatHistory);
+                }
             }
 
             setMessages((prev) => [
@@ -145,23 +230,23 @@ export default function ChatPage() {
         );
 
     return (
-        <div className="flex h-screen overflow-hidden bg-white">
+        <div className="flex h-[100dvh] overflow-hidden bg-white">
             {/* SIDEBAR */}
             <aside
                 className={cn(
-                    "fixed inset-y-0 left-0 z-30 w-72 bg-gray-50 border-r border-gray-200 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0",
+                    "fixed inset-y-0 left-0 z-30 w-72 bg-gray-900 text-white transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0",
                     sidebarOpen ? "translate-x-0" : "-translate-x-full"
                 )}
             >
                 <div className="flex flex-col h-full p-4">
                     <div className="flex items-center justify-between mb-6 pl-2">
-                        <div className="font-bold text-lg text-gray-700 flex items-center gap-2">
-                            <MessageSquare className="w-5 h-5 text-indigo-600" />{" "}
+                        <div className="font-bold text-lg flex items-center gap-2 text-white">
+                            <MessageSquare className="w-5 h-5 text-indigo-400" />{" "}
                             Chats
                         </div>
                         <button
                             onClick={() => router.push("/select")}
-                            className="p-2 hover:bg-gray-200 rounded-lg text-gray-500"
+                            className="p-2 hover:bg-gray-800 rounded-lg text-gray-400"
                         >
                             <ArrowLeft className="w-5 h-5" />
                         </button>
@@ -173,38 +258,49 @@ export default function ChatPage() {
                                 `/chat/new?persona=${selectedPersona.id}`
                             )
                         }
-                        className="flex items-center gap-2 w-full p-3 bg-white border border-gray-200 hover:border-indigo-300 hover:text-indigo-600 shadow-sm rounded-xl transition-all text-gray-600 font-medium mb-6"
+                        className="flex items-center gap-2 w-full p-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition mb-6"
                     >
-                        <PlusCircle className="w-5 h-5" />
+                        <PlusCircle className="w-5 h-5" />{" "}
                         <span>New Conversation</span>
                     </button>
 
                     <div className="flex-1 overflow-y-auto space-y-1 pr-2 scrollbar-thin">
-                        <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 pl-2">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 pl-2">
                             History
                         </div>
                         {chatHistory.map((chat) => (
-                            <button
+                            <div
                                 key={chat.id}
                                 onClick={() => router.push(`/chat/${chat.id}`)}
                                 className={cn(
-                                    "w-full text-left p-3 rounded-lg text-sm transition-all truncate border border-transparent",
+                                    "group relative flex items-center justify-between w-full p-3 rounded-lg text-sm transition-all cursor-pointer",
                                     chatId === chat.id
-                                        ? "bg-white shadow-md border-gray-100 text-indigo-600 font-medium"
-                                        : "text-gray-600 hover:bg-gray-200/50"
+                                        ? "bg-gray-800 text-white"
+                                        : "text-gray-400 hover:bg-gray-800 hover:text-white"
                                 )}
                             >
-                                {chat.title}
-                            </button>
+                                <span className="truncate pr-6">
+                                    {chat.title}
+                                </span>
+                                <button
+                                    onClick={(e) =>
+                                        handleDeleteChat(e, chat.id)
+                                    }
+                                    className="absolute right-2 p-1.5 rounded-md text-gray-400 hover:text-red-400 hover:bg-gray-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Delete"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </div>
                         ))}
                     </div>
 
-                    <div className="pt-4 mt-2 border-t border-gray-200">
+                    <div className="pt-4 mt-2 border-t border-gray-800">
                         {isSignedIn ? (
-                            <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-200/50 transition">
+                            <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-800 transition">
                                 <UserButton afterSignOutUrl="/" />
                                 <div className="flex flex-col overflow-hidden">
-                                    <span className="text-sm font-medium text-gray-700 truncate">
+                                    <span className="text-sm text-gray-300 truncate">
                                         {user?.fullName}
                                     </span>
                                     <span className="text-xs text-gray-500">
@@ -213,9 +309,9 @@ export default function ChatPage() {
                                 </div>
                             </div>
                         ) : (
-                            <div className="bg-indigo-50 p-4 rounded-xl">
+                            <div className="bg-indigo-900/50 p-4 rounded-xl">
                                 <SignInButton mode="modal">
-                                    <button className="w-full py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg">
+                                    <button className="w-full py-2 bg-indigo-600 hover:bg-indigo-800 text-white text-xs font-bold rounded-lg">
                                         Login to save
                                     </button>
                                 </SignInButton>
@@ -228,7 +324,7 @@ export default function ChatPage() {
             {/* MOBILE OVERLAY */}
             {sidebarOpen && (
                 <div
-                    className="fixed inset-0 bg-black/20 backdrop-blur-sm z-20 md:hidden"
+                    className="fixed inset-0 bg-black/50 z-20 md:hidden backdrop-blur-sm"
                     onClick={() => setSidebarOpen(false)}
                 />
             )}
@@ -236,12 +332,11 @@ export default function ChatPage() {
             {/* RIGHT SIDE: CHAT AREA */}
             <div
                 className={cn(
-                    "flex-1 flex flex-col relative bg-white/50",
+                    "flex-1 flex flex-col relative bg-white/50 min-w-0",
                     selectedPersona.chatBg
                 )}
             >
-                {/* Header */}
-                <header className="flex-none h-16 px-6 flex items-center justify-between bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-10">
+                <header className="flex-none h-16 px-4 md:px-6 flex items-center justify-between bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-10">
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => setSidebarOpen(true)}
@@ -250,34 +345,35 @@ export default function ChatPage() {
                             <Menu className="w-5 h-5" />
                         </button>
                         <div className="relative">
-                            <img
+                            <Image
                                 src={selectedPersona.avatar}
                                 alt="Avatar"
-                                className="w-10 h-10 rounded-full border-2 border-white shadow-sm"
+                                className="w-8 h-8 md:w-10 md:h-10 rounded-full border-2 border-white shadow-sm"
+                                width={50}
+                                height={50}
                             />
-                            <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></span>
+                            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 md:w-3 md:h-3 bg-green-500 border-2 border-white rounded-full"></span>
                         </div>
                         <div>
                             <h3 className="font-bold text-gray-800 text-sm leading-tight">
                                 {selectedPersona.name}
                             </h3>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-[10px] md:text-xs text-gray-500">
                                 Always active
                             </p>
                         </div>
                     </div>
                     {!isSignedIn && (
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full border border-gray-200">
-                            <span className="text-xs font-medium text-gray-600">
-                                {FREE_LIMIT - guestMsgCount} free messages
+                        <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full border border-gray-200">
+                            <span className="text-[10px] md:text-xs font-medium text-gray-600">
+                                {FREE_LIMIT - guestMsgCount} left
                             </span>
                         </div>
                     )}
                 </header>
 
-                {/* MESSAGES LIST */}
                 <div className="flex-1 overflow-y-auto p-4 md:p-6 scroll-smooth">
-                    <div className="max-w-3xl mx-auto space-y-8">
+                    <div className="max-w-3xl mx-auto space-y-6 md:space-y-8">
                         {messages.map((msg, idx) => {
                             const isUser = msg.role === "user";
                             return (
@@ -290,20 +386,21 @@ export default function ChatPage() {
                                 >
                                     <div
                                         className={cn(
-                                            "flex gap-4 max-w-[85%] md:max-w-[75%]",
+                                            "flex gap-3 md:gap-4 max-w-[90%] md:max-w-[80%]",
                                             isUser
                                                 ? "flex-row-reverse"
                                                 : "flex-row"
                                         )}
                                     >
-                                        {/* AVATAR */}
                                         <div className="flex-shrink-0 mt-1">
                                             {isUser ? (
                                                 isSignedIn && user?.imageUrl ? (
-                                                    <img
+                                                    <Image
                                                         src={user.imageUrl}
                                                         alt="Me"
                                                         className="w-8 h-8 rounded-full border border-gray-200 shadow-sm object-cover"
+                                                        height={50}
+                                                        width={50}
                                                     />
                                                 ) : (
                                                     <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center border border-gray-200">
@@ -311,18 +408,19 @@ export default function ChatPage() {
                                                     </div>
                                                 )
                                             ) : (
-                                                <img
+                                                <Image
                                                     src={selectedPersona.avatar}
                                                     alt="Mentor"
                                                     className="w-8 h-8 rounded-full border border-gray-200 shadow-sm object-cover"
+                                                    width={50}
+                                                    height={50}
                                                 />
                                             )}
                                         </div>
 
-                                        {/* BUBBLE CONTENT - FIXED MARKDOWN */}
                                         <div
                                             className={cn(
-                                                "p-4 md:p-5 rounded-2xl text-sm md:text-base leading-relaxed shadow-sm",
+                                                "p-3 md:p-5 rounded-2xl text-sm md:text-base leading-relaxed shadow-sm overflow-hidden min-w-0",
                                                 isUser
                                                     ? cn(
                                                           selectedPersona.userBubble,
@@ -337,9 +435,50 @@ export default function ChatPage() {
                                             {isUser ? (
                                                 msg.content
                                             ) : (
-                                                /* --- FIX APPLIED HERE --- */
-                                                <div className="prose prose-sm max-w-none wrap-break-word">
-                                                    <ReactMarkdown>
+                                                <div className="prose prose-sm max-w-none w-full wrap-break-word dark:prose-invert">
+                                                    <ReactMarkdown
+                                                        components={{
+                                                            code({
+                                                                node,
+                                                                inline,
+                                                                className,
+                                                                children,
+                                                                ...props
+                                                            }) {
+                                                                const match =
+                                                                    /language-(\w+)/.exec(
+                                                                        className ||
+                                                                            ""
+                                                                    );
+                                                                return !inline &&
+                                                                    match ? (
+                                                                    <CodeBlock
+                                                                        language={
+                                                                            match[1]
+                                                                        }
+                                                                        value={String(
+                                                                            children
+                                                                        ).replace(
+                                                                            /\n$/,
+                                                                            ""
+                                                                        )}
+                                                                    />
+                                                                ) : (
+                                                                    <code
+                                                                        className={cn(
+                                                                            "bg-black/10 text-red-600 rounded px-1 py-0.5 text-sm font-mono",
+                                                                            className
+                                                                        )}
+                                                                        {...props}
+                                                                    >
+                                                                        {
+                                                                            children
+                                                                        }
+                                                                    </code>
+                                                                );
+                                                            },
+                                                        }}
+                                                    >
                                                         {msg.content}
                                                     </ReactMarkdown>
                                                 </div>
@@ -350,19 +489,20 @@ export default function ChatPage() {
                             );
                         })}
 
-                        {/* LOADING STATE */}
                         {isLoading && (
                             <div className="flex w-full justify-start animate-pulse">
                                 <div className="flex gap-4">
-                                    <img
+                                    <Image
                                         src={selectedPersona.avatar}
                                         className="w-8 h-8 rounded-full mt-1 opacity-50 grayscale"
                                         alt="Loading..."
+                                        width={40}
+                                        height={40}
                                     />
                                     <div className="bg-white border border-gray-100 p-4 rounded-2xl rounded-tl-none shadow-sm flex gap-1 items-center h-12">
-                                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
                                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.4s]"></div>
                                     </div>
                                 </div>
                             </div>
@@ -371,8 +511,7 @@ export default function ChatPage() {
                     </div>
                 </div>
 
-                {/* Input Area */}
-                <footer className="flex-none p-4 md:p-6">
+                <footer className="flex-none p-3 md:p-6 bg-white/80 backdrop-blur-sm md:bg-transparent">
                     <div className="max-w-3xl mx-auto">
                         <div className="relative flex items-end gap-2 bg-white p-2 rounded-[24px] border border-gray-200 shadow-lg shadow-gray-100 focus-within:ring-2 focus-within:ring-indigo-100 focus-within:border-indigo-300 transition-all">
                             <textarea
@@ -385,20 +524,20 @@ export default function ChatPage() {
                                     }
                                 }}
                                 placeholder={
-                                    isSignedIn
-                                        ? "Type a message..."
-                                        : `Type a message (${
+                                    user
+                                        ? `Type a message....`
+                                        : `Only ${
                                               FREE_LIMIT - guestMsgCount
-                                          } left)...`
+                                          } message remaining`
                                 }
                                 disabled={isLoading}
-                                className="w-full max-h-32 min-h-[50px] p-3 bg-transparent border-0 focus:ring-0 text-gray-800 placeholder:text-gray-400 resize-none focus:outline-none"
+                                className="w-full max-h-32 min-h-[44px] p-2 md:p-3 bg-transparent border-0 focus:ring-0 text-gray-800 placeholder:text-gray-400 resize-none focus:outline-none text-sm md:text-base"
                             />
                             <button
                                 onClick={handleSendMessage}
                                 disabled={!input.trim() || isLoading}
                                 className={cn(
-                                    "p-3 rounded-full text-white shadow-md transition-all mb-1 mr-1 focus:outline-none",
+                                    "p-2 md:p-3 rounded-full text-white shadow-md transition-all mb-1 mr-1 focus:outline-none shrink-0",
                                     !input.trim()
                                         ? "bg-gray-300 cursor-not-allowed"
                                         : cn(
@@ -408,9 +547,9 @@ export default function ChatPage() {
                                 )}
                             >
                                 {isLoading ? (
-                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" />
                                 ) : (
-                                    <Send className="w-5 h-5" />
+                                    <Send className="w-4 h-4 md:w-5 md:h-5" />
                                 )}
                             </button>
                         </div>

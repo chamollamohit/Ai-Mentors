@@ -5,6 +5,7 @@ import { ArrowLeft, MessageCircle } from "lucide-react";
 import { UserButton } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import { PERSONAS } from "@/lib/constants";
+import Image from "next/image";
 
 export default function SelectionPage() {
     return (
@@ -44,20 +45,22 @@ export default function SelectionPage() {
                                         "hover:border-indigo-300 hover:shadow-xl hover:shadow-indigo-100 transition-all duration-300 cursor-pointer"
                                     )}
                                 >
-                                    <div className="absolute inset-0 bg-gradient-to-r from-indigo-50 to-violet-50 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                                    <div className="absolute inset-0 bg-linear-to-r from-indigo-50 to-violet-50 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
-                                    <div className="relative h-full bg-white rounded-[20px] p-8 flex flex-col items-center text-center z-10">
+                                    <div className="relative h-full bg-white rounded-[20px] p-8 flex flex-col items-center text-center">
                                         <div className="relative mb-6">
                                             <div
                                                 className={cn(
-                                                    "absolute -inset-2 bg-gradient-to-r rounded-full opacity-0 group-hover:opacity-70 blur-md transition duration-500",
+                                                    "absolute -inset-2 bg-linear-to-r rounded-full opacity-0 group-hover:opacity-70 blur-md transition duration-500",
                                                     persona.gradient
                                                 )}
                                             />
-                                            <img
+                                            <Image
                                                 src={persona.avatar}
                                                 alt={persona.name}
                                                 className="relative w-28 h-28 rounded-full border-4 border-white shadow-sm object-cover"
+                                                width={50}
+                                                height={50}
                                             />
                                             <div className="absolute bottom-0 right-0 bg-green-500 w-5 h-5 rounded-full border-4 border-white"></div>
                                         </div>

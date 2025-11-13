@@ -23,4 +23,5 @@ export const PERSONAS = {
         userBubble: 'bg-blue-600',
         botBubble: 'bg-white border-blue-100 shadow-sm',
     },
+
 };
