@@ -99,6 +99,7 @@ export async function POST(req) {
                 // Create NEW Chat
 
                 const initialMessages = messages.map(m => ({ role: m.role, content: m.content }));
+                // Adding response from ai
                 initialMessages.push({ role: 'assistant', content: reply });
 
                 const newChat = await prisma.conversation.create({
@@ -116,12 +117,15 @@ export async function POST(req) {
                 // Append to EXISTING Chat
                 const lastUserMessage = messages[messages.length - 1];
                 await prisma.$transaction([
+                    // Adding User response to db
                     prisma.message.create({
                         data: { conversationId: activeConversationId, role: 'user', content: lastUserMessage.content }
                     }),
+                    // Adding AI response to db
                     prisma.message.create({
                         data: { conversationId: activeConversationId, role: 'assistant', content: reply }
                     }),
+                    // Updating db for lastest update 
                     prisma.conversation.update({
                         where: { id: activeConversationId },
                         data: { updatedAt: new Date() }

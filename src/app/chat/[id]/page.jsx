@@ -98,11 +98,23 @@ export default function ChatPage() {
     // 1. INITIALIZE CHAT
     useEffect(() => {
         const initChat = async () => {
+            const personaKey = searchParams.get("persona");
+            const persona = PERSONAS[personaKey] || PERSONAS["hitesh"];
+            setSelectedPersona(persona);
+
             if (chatId === "new") {
-                const personaKey = searchParams.get("persona");
-                const persona = PERSONAS[personaKey] || PERSONAS["hitesh"];
-                setSelectedPersona(persona);
-                setMessages([{ role: "assistant", content: persona.greeting }]);
+                const guestStorageKey = `guest-chat-${persona.id}`;
+                const guestChatHistory = localStorage.getItem(guestStorageKey);
+
+                if (isSignedIn && guestChatHistory) {
+                    const messages = JSON.parse(guestChatHistory);
+                    setMessages(messages);
+                    setGuestMsgCount(Math.floor(messages.length / 2));
+                } else {
+                    setMessages([
+                        { role: "assistant", content: persona.greeting },
+                    ]);
+                }
             } else {
                 setIsLoading(true);
                 try {
@@ -126,7 +138,7 @@ export default function ChatPage() {
         };
         initChat();
         setSidebarOpen(false);
-    }, [chatId, searchParams]);
+    }, [chatId, searchParams, isSignedIn]);
 
     // 2. LOAD SIDEBAR
     useEffect(() => {
@@ -171,16 +183,9 @@ export default function ChatPage() {
         e.preventDefault();
         if (!input.trim() || isLoading) return;
 
-        if (!isSignedIn) {
-            if (guestMsgCount >= FREE_LIMIT) {
-                setShowLoginModal(true);
-                return;
-            }
-            setGuestMsgCount((prev) => prev + 1);
-        }
-
         const userMessage = { role: "user", content: input };
-        const newHistory = [...messages, userMessage];
+        const newHistory = [...messages, userMessage]; // Full history
+
         setMessages(newHistory);
         setInput("");
         setIsLoading(true);
@@ -212,6 +217,24 @@ export default function ChatPage() {
                 ...prev,
                 { role: "assistant", content: data.reply },
             ]);
+
+            if (!isSignedIn) {
+                if (guestMsgCount >= FREE_LIMIT) {
+                    setShowLoginModal(true);
+                    return;
+                }
+                const finalHistory = [
+                    ...newHistory,
+                    { role: "assistant", content: data.reply },
+                ];
+                setGuestMsgCount((prev) => prev + 1);
+                localStorage.setItem(
+                    `guest-chat-${selectedPersona.id}`,
+                    JSON.stringify(finalHistory)
+                );
+                return;
+            }
+            localStorage.removeItem(`guest-chat-${selectedPersona.id}`);
         } catch (error) {
             setMessages((prev) => [
                 ...prev,
