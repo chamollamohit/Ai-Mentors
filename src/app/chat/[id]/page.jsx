@@ -110,6 +110,14 @@ export default function ChatPage() {
                     const messages = JSON.parse(guestChatHistory);
                     setMessages(messages);
                     setGuestMsgCount(Math.floor(messages.length / 2));
+                } else if (guestChatHistory) {
+                    const messages = JSON.parse(guestChatHistory);
+                    const guestMessageCount = messages.filter(
+                        (msg) => msg.role === "user"
+                    );
+
+                    setMessages([...messages]);
+                    setGuestMsgCount(guestMessageCount.length);
                 } else {
                     setMessages([
                         { role: "assistant", content: persona.greeting },
@@ -151,6 +159,13 @@ export default function ChatPage() {
         }
     }, [isSignedIn, chatId]);
 
+    //  Remove Chat History from LocalStorage if user logged in
+    useEffect(() => {
+        if (isSignedIn && selectedPersona) {
+            localStorage.removeItem(`guest-chat-${selectedPersona.id}`);
+        }
+    }, [isSignedIn, selectedPersona]);
+
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, isLoading]);
@@ -182,15 +197,21 @@ export default function ChatPage() {
     const handleSendMessage = async (e) => {
         e.preventDefault();
         if (!input.trim() || isLoading) return;
-
-        const userMessage = { role: "user", content: input };
-        const newHistory = [...messages, userMessage]; // Full history
-
-        setMessages(newHistory);
-        setInput("");
-        setIsLoading(true);
-
         try {
+            if (!isSignedIn) {
+                if (guestMsgCount >= FREE_LIMIT) {
+                    setShowLoginModal(true);
+                    return;
+                }
+            }
+            setIsLoading(true);
+
+            const userMessage = { role: "user", content: input };
+            const newHistory = [...messages, userMessage]; // Full history
+
+            setMessages(newHistory);
+            setInput("");
+
             const activeId = chatId === "new" ? null : chatId;
             const res = await fetch("/api/chat", {
                 method: "POST",
@@ -212,17 +233,12 @@ export default function ChatPage() {
                         .then(setChatHistory);
                 }
             }
-
             setMessages((prev) => [
                 ...prev,
                 { role: "assistant", content: data.reply },
             ]);
 
             if (!isSignedIn) {
-                if (guestMsgCount >= FREE_LIMIT) {
-                    setShowLoginModal(true);
-                    return;
-                }
                 const finalHistory = [
                     ...newHistory,
                     { role: "assistant", content: data.reply },
@@ -232,9 +248,7 @@ export default function ChatPage() {
                     `guest-chat-${selectedPersona.id}`,
                     JSON.stringify(finalHistory)
                 );
-                return;
             }
-            localStorage.removeItem(`guest-chat-${selectedPersona.id}`);
         } catch (error) {
             setMessages((prev) => [
                 ...prev,
@@ -321,7 +335,7 @@ export default function ChatPage() {
                     <div className="pt-4 mt-2 border-t border-gray-800">
                         {isSignedIn ? (
                             <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-800 transition">
-                                <UserButton afterSignOutUrl="/" />
+                                <UserButton />
                                 <div className="flex flex-col overflow-hidden">
                                     <span className="text-sm text-gray-300 truncate">
                                         {user?.fullName}

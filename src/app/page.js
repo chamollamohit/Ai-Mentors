@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { SignInButton, SignUpButton, UserButton, useUser } from "@clerk/nextjs";
-
+import Image from "next/image";
+import logo from "../../public/logo.png"
 
 export default function LandingPage() {
   const { isSignedIn, user } = useUser();
@@ -14,8 +15,8 @@ export default function LandingPage() {
       <nav className="sticky top-0 z-50 backdrop-blur-md bg-white/70 border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-6 h-16 flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <div className="bg-indigo-600 p-2 rounded-lg">
-              <Sparkles className="w-5 h-5 text-white" />
+            <div className="p-2 rounded-lg">
+              <Image src={logo} width={45} height={"auto"} alt="logo" />
             </div>
             <span className="text-xl font-bold bg-clip-text text-transparent bg-linear-to-r from-indigo-600 to-violet-600">
               AI Mentors
